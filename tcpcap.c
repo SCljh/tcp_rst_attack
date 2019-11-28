@@ -109,11 +109,7 @@ int buildRstPacket(struct ip_data *ip, struct tcp_data *tcp, struct ethernet_dat
     u_short payload_s;
     u_long src_ip,dst_ip;
     u_short src_prt,dst_prt;
-    char src_char_ip[INET_ADDRSTRLEN], dst_char_ip[INET_ADDRSTRLEN];
-
-    //TODO: ETHERNET TEST RECOVERY
-    unsigned char src_mac_test[6] = {0x04,0xEA,0x56,0x2e,0xfe,0x28};
-    unsigned char dst_mac_test[6] = {0x28,0x6c,0x07,0x69,0xa4,0xa2};
+    char *src_char_ip, *dst_char_ip;
 
     char errbuf[LIBNET_ERRBUF_SIZE];
 
@@ -124,56 +120,38 @@ int buildRstPacket(struct ip_data *ip, struct tcp_data *tcp, struct ethernet_dat
         exit(EXIT_FAILURE);
     }
 
-    //TODO: IP TEST RECOVERY
-    char *src_ip_char_test = "192.168.31.127";
-    char *dst_ip_char_test = "10.59.13.159";
-    u_long src_ip_test = libnet_name2addr4(l,src_ip_char_test,LIBNET_RESOLVE);    //将字符串类型的ip转换为顺序网络字节流
-    u_long dst_ip_test = libnet_name2addr4(l,dst_ip_char_test,LIBNET_RESOLVE);
 
-    //TODO: TCP TEST RECOVERY
+    src_char_ip = inet_ntoa(ip->ip_src);
+    dst_char_ip = inet_ntoa(ip->ip_dst);
 
-
-    src_ip = ip->ip_src.s_addr;
-    dst_ip = ip->ip_dst.s_addr;
-    dst_prt = tcp->port_dst;
-    src_prt = tcp->port_src;
+    dst_prt = ntohs(tcp->port_dst);
+    src_prt = ntohs(tcp->port_src);
 
     t=libnet_build_tcp_options("\003\003\012\001\002\004\001\011\010\012\077\077\077\077\000\000\000\000\000\000",20,l,0);
     if(t==-1)
     {printf("cant build TCP options: %s\n",libnet_geterror(l));
         goto bad;}
 
-    //TODO: TEST RECOVERY
-    u_short dst_port_test = 2807;
-    u_short src_port_test = 49944;
     payload_s = strlen(payload);
 
-    //t=libnet_build_tcp(src_prt,dst_prt,tcp->seq,0,TH_RST,tcp->win,0,10,
-    //                   LIBNET_TCP_H+20,NULL,0,l,0 );
-    t=libnet_build_tcp(src_port_test,dst_port_test,tcp->seq,0x02020202,TH_RST,tcp->win,0,10,
-                       LIBNET_TCP_H + 20 + payload_s,(uint8_t *)payload,payload_s,l,0 );
+    t=libnet_build_tcp(src_prt,dst_prt,tcp->seq,0,TH_RST,tcp->win,0,10,
+                     LIBNET_TCP_H+20+payload_s,(uint8_t *)payload,payload_s,l,0 );
+    //t=libnet_build_tcp(src_port_test,dst_port_test,tcp->seq,0x02020202,TH_RST,tcp->win,0,10,
+    //                   LIBNET_TCP_H + 20 + payload_s,(uint8_t *)payload,payload_s,l,0 );
     if(t==-1)
     {
         printf("cant build TCP header:%s\n",libnet_geterror(l));
         goto bad;
     }
 
-    t=libnet_build_ipv4(LIBNET_IPV4_H+LIBNET_TCP_H+20+payload_s,0,242,0,64,IPPROTO_TCP,0, src_ip_test, dst_ip_test,NULL,0,l,0);
+    t=libnet_build_ipv4(LIBNET_IPV4_H+LIBNET_TCP_H+20+payload_s,0,242,0,64,IPPROTO_TCP,0, ip->ip_src.s_addr, ip->ip_dst.s_addr,NULL,0,l,0);
 
     if(t==-1)
     {
         printf("cant build IP header:%s\n",libnet_geterror(l));
         goto bad;
     }
-    //t=libnet_build_ethernet((u_int8_t *)ether->mac_dst, (u_int8_t *)ether->mac_src, ETHERTYPE_IP,NULL,0, l,0);
-    //TODO: TEST RECOVERY
-    //t=libnet_build_ethernet( (u_int8_t *)dst_mac_test, (u_int8_t *)src_mac_test, ETHERTYPE_IP,NULL,0, l,0);
 
-    if(t==-1)
-    {
-        printf("cant buid ethernet header:%s\n",libnet_geterror(l));
-        goto bad;
-    }
     c=libnet_write(l);
     if(c==-1)
     {
@@ -238,8 +216,8 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
         printf("   * Invalid IP header length: %u bytes\n", size_ip);
         return;
     }
-    ip_d->ip_src = ip->ip_src;
-    ip_d->ip_dst = ip->ip_dst;
+    ip_d->ip_src = ip->ip_dst;
+    ip_d->ip_dst = ip->ip_src;
 
 #ifdef DEBUG
     printf("src ip:%s\n", inet_ntoa(ip->ip_src));
@@ -255,8 +233,9 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
         printf("   * Invalid TCP header length: %u bytes\n", size_tcp);
         return;
     }
-    tcp_d->port_src = tcp->th_sport;
-    tcp_d->port_dst = tcp->th_dport;
+
+    tcp_d->port_src = tcp->th_dport;
+    tcp_d->port_dst = tcp->th_sport;
     tcp_d->seq = ntohl(tcp->th_ack);
     tcp_d->win = ntohs(tcp->th_win);
 
