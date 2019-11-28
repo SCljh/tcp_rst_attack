@@ -3,7 +3,7 @@ project(tcp_rst_attack)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(tcp_rst_attack tcpcap.c)
+add_executable(tcp_rst_attack tcpcap.c nettest/server.c)
 
 TARGET_LINK_LIBRARIES(tcp_rst_attack pcap)
 TARGET_LINK_LIBRARIES(tcp_rst_attack net)
