@@ -1,10 +1,2 @@
 # tcp_rst_attack
-通过抓取与目标节点的tcp连接获取tcp以及ip数据包的相关信息，并通过获取信息完成tcp rst攻击
-
-(还有很多bug要改
-
-目前只是搭了一个框框
-
-有空再慢慢完善
-
-there are something wrong in this program.)
+閫氳繃鎶撳彇涓庣洰鏍囪妭鐐圭殑tcp杩炴帴鑾峰彇tcp浠ュ強ip鏁版嵁鍖呯殑鐩稿叧淇℃伅锛屽苟閫氳繃鑾峰彇淇℃伅瀹屾垚tcp rst鏀诲嚮
